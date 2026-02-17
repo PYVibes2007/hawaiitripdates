@@ -228,6 +228,11 @@
             font-weight: 600;
         }
         
+        .day.ideal {
+            border: 3px solid #ff0000;
+            box-shadow: 0 0 8px rgba(255, 0, 0, 0.5);
+        }
+        
         .current-dates {
             margin-top: 30px;
             padding: 20px;
@@ -304,6 +309,10 @@
             <div class="legend-item">
                 <div class="legend-color both"></div>
                 <span>Both (Overlap)</span>
+            </div>
+            <div class="legend-item">
+                <div style="width: 24px; height: 24px; border: 3px solid #ff0000; border-radius: 4px; background: white;"></div>
+                <span>Works for Everyone</span>
             </div>
         </div>
         
@@ -489,12 +498,21 @@
                     const isBlackout = isDateInRange(date, blackoutDates) || isDateInRecurringRange(date, recurringBlackoutDates);
                     const isPreferred = isDateInRange(date, preferredDates) || isDateInRecurringRange(date, recurringPreferredDates);
                     
+                    // Check if this date works for everyone
+                    const hasPreferredDates = preferredDates.length > 0 || recurringPreferredDates.length > 0;
+                    const isIdeal = !isBlackout && isPreferred && hasPreferredDates;
+                    
                     if (isBlackout && isPreferred) {
                         dayDiv.classList.add('both');
                     } else if (isBlackout) {
                         dayDiv.classList.add('blackout');
                     } else if (isPreferred) {
                         dayDiv.classList.add('preferred');
+                    }
+                    
+                    // Add red border for ideal dates (no blackouts + someone wants it)
+                    if (isIdeal) {
+                        dayDiv.classList.add('ideal');
                     }
                     
                     days.appendChild(dayDiv);
