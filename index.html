@@ -125,13 +125,9 @@
             background: #1976D2;
         }
         
-        .btn-clear {
-            background: #f44336;
-            color: white;
-        }
-        
-        .btn-clear:hover {
-            background: #d32f2f;
+        .btn-add:disabled {
+            background: #ccc;
+            cursor: not-allowed;
         }
         
         .calendars {
@@ -284,6 +280,12 @@
         .btn-remove:hover {
             background: #d32f2f;
         }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -335,33 +337,89 @@
                 </label>
             </div>
             <div class="button-group">
-                <button class="btn-add" onclick="addDateRange()">Add Dates</button>
+                <button class="btn-add" id="addButton">Add Dates</button>
             </div>
         </div>
         
-        <div class="calendars" id="calendars"></div>
+        <div id="loadingMessage" class="loading">Loading calendar data...</div>
         
-        <div class="current-dates">
+        <div class="calendars" id="calendars" style="display: none;"></div>
+        
+        <div class="current-dates" id="currentDatesSection" style="display: none;">
             <h3>Current Date Ranges</h3>
             <div class="date-list" id="dateList"></div>
         </div>
     </div>
 
-    <script>
-        // Initialize with empty date arrays
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
+
+        // Your Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyB24LffDy4GWEi8p311rlcsHvKMH2ZcdDc",
+            authDomain: "hawaii-trip-9c1a6.firebaseapp.com",
+            projectId: "hawaii-trip-9c1a6",
+            storageBucket: "hawaii-trip-9c1a6.firebasestorage.app",
+            messagingSenderId: "216744048411",
+            appId: "1:216744048411:web:226ab6ae7824dc1bfe45be"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Global data arrays
         let blackoutDates = [];
-        
         let preferredDates = [];
-        
-        // Recurring dates (day ranges that repeat every month)
         let recurringBlackoutDates = [];
         let recurringPreferredDates = [];
-        
+
         const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                            'July', 'August', 'September', 'October', 'November', 'December'];
         
         const weekdayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        
+
+        // Load data from Firebase
+        async function loadData() {
+            try {
+                // Listen for real-time updates
+                onSnapshot(collection(db, 'dates'), (snapshot) => {
+                    blackoutDates = [];
+                    preferredDates = [];
+                    recurringBlackoutDates = [];
+                    recurringPreferredDates = [];
+
+                    snapshot.forEach((doc) => {
+                        const data = { id: doc.id, ...doc.data() };
+                        
+                        if (data.isRecurring) {
+                            if (data.type === 'blackout') {
+                                recurringBlackoutDates.push(data);
+                            } else {
+                                recurringPreferredDates.push(data);
+                            }
+                        } else {
+                            if (data.type === 'blackout') {
+                                blackoutDates.push(data);
+                            } else {
+                                preferredDates.push(data);
+                            }
+                        }
+                    });
+
+                    renderCalendars();
+                    document.getElementById('loadingMessage').style.display = 'none';
+                    document.getElementById('calendars').style.display = 'grid';
+                    document.getElementById('currentDatesSection').style.display = 'block';
+                });
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loadingMessage').textContent = 'Error loading data. Please refresh the page.';
+            }
+        }
+
         function isDateInRange(date, ranges) {
             const dateStr = date.toISOString().split('T')[0];
             return ranges.some(range => {
@@ -451,7 +509,7 @@
             updateDateList();
         }
         
-        function addDateRange() {
+        async function addDateRange() {
             const personName = document.getElementById('personName').value.trim();
             const type = document.getElementById('dateType').value;
             const startDate = document.getElementById('startDate').value;
@@ -467,61 +525,57 @@
                 alert('Please select a start date');
                 return;
             }
+
+            // Disable button while saving
+            const addButton = document.getElementById('addButton');
+            addButton.disabled = true;
+            addButton.textContent = 'Adding...';
             
-            if (isRecurring) {
-                // For recurring dates, extract just the day numbers
-                const startDay = new Date(startDate + 'T00:00:00').getDate();
-                const endDay = new Date(endDate + 'T00:00:00').getDate();
-                
-                const recurringRange = {
-                    startDay: startDay,
-                    endDay: endDay,
-                    person: personName
-                };
-                
-                if (type === 'blackout') {
-                    recurringBlackoutDates.push(recurringRange);
+            try {
+                if (isRecurring) {
+                    const startDay = new Date(startDate + 'T00:00:00').getDate();
+                    const endDay = new Date(endDate + 'T00:00:00').getDate();
+                    
+                    await addDoc(collection(db, 'dates'), {
+                        type: type,
+                        startDay: startDay,
+                        endDay: endDay,
+                        person: personName,
+                        isRecurring: true
+                    });
                 } else {
-                    recurringPreferredDates.push(recurringRange);
+                    await addDoc(collection(db, 'dates'), {
+                        type: type,
+                        start: startDate,
+                        end: endDate,
+                        person: personName,
+                        isRecurring: false
+                    });
                 }
-            } else {
-                const range = {
-                    start: startDate,
-                    end: endDate,
-                    person: personName
-                };
                 
-                if (type === 'blackout') {
-                    blackoutDates.push(range);
-                } else {
-                    preferredDates.push(range);
-                }
+                // Clear inputs
+                document.getElementById('personName').value = '';
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+                document.getElementById('isRecurring').checked = false;
+            } catch (error) {
+                console.error('Error adding date:', error);
+                alert('Error adding date. Please try again.');
+            } finally {
+                addButton.disabled = false;
+                addButton.textContent = 'Add Dates';
             }
-            
-            // Clear inputs
-            document.getElementById('personName').value = '';
-            document.getElementById('startDate').value = '';
-            document.getElementById('endDate').value = '';
-            document.getElementById('isRecurring').checked = false;
-            
-            renderCalendars();
         }
         
-        function removeDate(type, index, isRecurring = false) {
-            if (isRecurring) {
-                if (type === 'blackout') {
-                    recurringBlackoutDates.splice(index, 1);
-                } else {
-                    recurringPreferredDates.splice(index, 1);
-                }
-            } else {
-                if (type === 'blackout') {
-                    blackoutDates.splice(index, 1);
-                } else {
-                    preferredDates.splice(index, 1);
+        async function removeDate(id) {
+            if (confirm('Delete this date range?')) {
+                try {
+                    await deleteDoc(doc(db, 'dates', id));
+                } catch (error) {
+                    console.error('Error removing date:', error);
+                    alert('Error removing date. Please try again.');
                 }
             }
-            renderCalendars();
         }
         
         function updateDateList() {
@@ -529,7 +583,7 @@
             listDiv.innerHTML = '';
             
             // Add blackout dates
-            blackoutDates.forEach((date, index) => {
+            blackoutDates.forEach((date) => {
                 const item = document.createElement('div');
                 item.className = 'date-item blackout';
                 
@@ -542,7 +596,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn-remove';
                 removeBtn.textContent = 'Delete';
-                removeBtn.onclick = () => removeDate('blackout', index, false);
+                removeBtn.onclick = () => removeDate(date.id);
                 
                 item.appendChild(info);
                 item.appendChild(removeBtn);
@@ -550,7 +604,7 @@
             });
             
             // Add recurring blackout dates
-            recurringBlackoutDates.forEach((date, index) => {
+            recurringBlackoutDates.forEach((date) => {
                 const item = document.createElement('div');
                 item.className = 'date-item blackout';
                 
@@ -563,7 +617,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn-remove';
                 removeBtn.textContent = 'Delete';
-                removeBtn.onclick = () => removeDate('blackout', index, true);
+                removeBtn.onclick = () => removeDate(date.id);
                 
                 item.appendChild(info);
                 item.appendChild(removeBtn);
@@ -571,7 +625,7 @@
             });
             
             // Add preferred dates
-            preferredDates.forEach((date, index) => {
+            preferredDates.forEach((date) => {
                 const item = document.createElement('div');
                 item.className = 'date-item preferred';
                 
@@ -584,7 +638,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn-remove';
                 removeBtn.textContent = 'Delete';
-                removeBtn.onclick = () => removeDate('preferred', index, false);
+                removeBtn.onclick = () => removeDate(date.id);
                 
                 item.appendChild(info);
                 item.appendChild(removeBtn);
@@ -592,7 +646,7 @@
             });
             
             // Add recurring preferred dates
-            recurringPreferredDates.forEach((date, index) => {
+            recurringPreferredDates.forEach((date) => {
                 const item = document.createElement('div');
                 item.className = 'date-item preferred';
                 
@@ -605,7 +659,7 @@
                 const removeBtn = document.createElement('button');
                 removeBtn.className = 'btn-remove';
                 removeBtn.textContent = 'Delete';
-                removeBtn.onclick = () => removeDate('preferred', index, true);
+                removeBtn.onclick = () => removeDate(date.id);
                 
                 item.appendChild(info);
                 item.appendChild(removeBtn);
@@ -613,8 +667,11 @@
             });
         }
         
-        // Initial render
-        renderCalendars();
+        // Initial load
+        loadData();
+        
+        // Set up button event listener
+        document.getElementById('addButton').addEventListener('click', addDateRange);
     </script>
 </body>
 </html>
