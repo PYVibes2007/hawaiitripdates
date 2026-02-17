@@ -348,19 +348,10 @@
     </div>
 
     <script>
-        // Initialize with the dates from your spreadsheet
-        let blackoutDates = [
-            { start: '2026-08-03', end: '2026-08-07', person: 'Myia' },
-            { start: '2026-08-23', end: '2026-09-04', person: 'Myia' },
-            { start: '2026-10-11', end: '2026-10-17', person: 'Myia' },
-            { start: '2026-08-01', end: '2026-11-19', person: 'Kou (Aug-Nov)' },
-            { start: '2027-01-18', end: '2027-03-31', person: 'Kou (Jan-Mar)' }
-        ];
+        // Initialize with empty date arrays
+        let blackoutDates = [];
         
-        let preferredDates = [
-            { start: '2026-11-20', end: '2026-11-29', person: 'Kou' },
-            { start: '2026-12-18', end: '2027-01-17', person: 'Kou' }
-        ];
+        let preferredDates = [];
         
         // Recurring dates (day ranges that repeat every month)
         let recurringBlackoutDates = [];
