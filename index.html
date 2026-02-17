@@ -447,6 +447,23 @@
             const calendarsDiv = document.getElementById('calendars');
             calendarsDiv.innerHTML = '';
             
+            // Identify which people have entered which types of dates
+            const peopleWithBlackouts = new Set();
+            const peopleWithPreferred = new Set();
+            
+            blackoutDates.forEach(d => peopleWithBlackouts.add(d.person));
+            recurringBlackoutDates.forEach(d => peopleWithBlackouts.add(d.person));
+            preferredDates.forEach(d => peopleWithPreferred.add(d.person));
+            recurringPreferredDates.forEach(d => peopleWithPreferred.add(d.person));
+            
+            // Get all unique people
+            const allPeople = new Set([...peopleWithBlackouts, ...peopleWithPreferred]);
+            
+            // Categorize people
+            const blackoutOnlyPeople = new Set([...peopleWithBlackouts].filter(p => !peopleWithPreferred.has(p)));
+            const preferredOnlyPeople = new Set([...peopleWithPreferred].filter(p => !peopleWithBlackouts.has(p)));
+            const bothTypesPeople = new Set([...peopleWithBlackouts].filter(p => peopleWithPreferred.has(p)));
+            
             // Show August 2026 through March 2027
             const startDate = new Date(2026, 7, 1); // August 2026
             const endDate = new Date(2027, 3, 1); // March 2027
@@ -498,9 +515,62 @@
                     const isBlackout = isDateInRange(date, blackoutDates) || isDateInRecurringRange(date, recurringBlackoutDates);
                     const isPreferred = isDateInRange(date, preferredDates) || isDateInRecurringRange(date, recurringPreferredDates);
                     
-                    // Check if this date works for everyone
-                    const hasPreferredDates = preferredDates.length > 0 || recurringPreferredDates.length > 0;
-                    const isIdeal = !isBlackout && isPreferred && hasPreferredDates;
+                    // Check if this date works for EVERYONE
+                    let worksForEveryone = true;
+                    
+                    if (allPeople.size > 0) {
+                        // Check blackout-only people: date must NOT be in their blackouts
+                        for (let person of blackoutOnlyPeople) {
+                            const personBlackouts = [
+                                ...blackoutDates.filter(d => d.person === person),
+                                ...recurringBlackoutDates.filter(d => d.person === person)
+                            ];
+                            if (isDateInRange(date, personBlackouts.filter(d => !d.isRecurring)) || 
+                                isDateInRecurringRange(date, personBlackouts.filter(d => d.isRecurring))) {
+                                worksForEveryone = false;
+                                break;
+                            }
+                        }
+                        
+                        // Check preferred-only people: date MUST be in their preferred dates
+                        if (worksForEveryone) {
+                            for (let person of preferredOnlyPeople) {
+                                const personPreferred = [
+                                    ...preferredDates.filter(d => d.person === person),
+                                    ...recurringPreferredDates.filter(d => d.person === person)
+                                ];
+                                if (!isDateInRange(date, personPreferred.filter(d => !d.isRecurring)) && 
+                                    !isDateInRecurringRange(date, personPreferred.filter(d => d.isRecurring))) {
+                                    worksForEveryone = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Check both-types people: date must be in preferred AND not in blackouts
+                        if (worksForEveryone) {
+                            for (let person of bothTypesPeople) {
+                                const personBlackouts = [
+                                    ...blackoutDates.filter(d => d.person === person),
+                                    ...recurringBlackoutDates.filter(d => d.person === person)
+                                ];
+                                const personPreferred = [
+                                    ...preferredDates.filter(d => d.person === person),
+                                    ...recurringPreferredDates.filter(d => d.person === person)
+                                ];
+                                
+                                const inBlackout = isDateInRange(date, personBlackouts.filter(d => !d.isRecurring)) || 
+                                                 isDateInRecurringRange(date, personBlackouts.filter(d => d.isRecurring));
+                                const inPreferred = isDateInRange(date, personPreferred.filter(d => !d.isRecurring)) || 
+                                                  isDateInRecurringRange(date, personPreferred.filter(d => d.isRecurring));
+                                
+                                if (inBlackout || !inPreferred) {
+                                    worksForEveryone = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                     
                     if (isBlackout && isPreferred) {
                         dayDiv.classList.add('both');
@@ -510,8 +580,8 @@
                         dayDiv.classList.add('preferred');
                     }
                     
-                    // Add red border for ideal dates (no blackouts + someone wants it)
-                    if (isIdeal) {
+                    // Add red border for dates that work for everyone
+                    if (worksForEveryone && allPeople.size > 0) {
                         dayDiv.classList.add('ideal');
                     }
                     
